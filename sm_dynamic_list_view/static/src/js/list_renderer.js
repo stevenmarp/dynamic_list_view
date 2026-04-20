@@ -87,8 +87,8 @@ patch(ListRenderer.prototype, {
     /**
      * Override getActiveColumns to apply saved order
      */
-    getActiveColumns(list) {
-        let columns = super.getActiveColumns(list);
+    getActiveColumns() {
+        let columns = super.getActiveColumns();
         
         const savedOrder = this._smLoadColumnOrder();
         if (!savedOrder || savedOrder.length === 0) {
