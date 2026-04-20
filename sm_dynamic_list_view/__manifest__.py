@@ -10,7 +10,7 @@
     "author": "Steven Marp",
     "website": "https://apps.odoo.com/apps/browse?repo_maintainer_id=512936",
     "category": "Tools",
-    "license": "LGPL-3",
+    "license": "OPL-1",
     "depends": ["web"],
     "assets": {
         "web.assets_backend": [
