@@ -2,7 +2,7 @@
 
 import { patch } from "@web/core/utils/patch";
 import { ListRenderer } from "@web/views/list/list_renderer";
-import { onMounted, onPatched, onWillRender } from "@odoo/owl";
+import { onMounted, onPatched } from "@odoo/owl";
 import { browser } from "@web/core/browser/browser";
 
 /**
@@ -148,7 +148,7 @@ patch(ListRenderer.prototype, {
         if (draggedName === targetName) return;
         
         // Reorder columns
-        const columns = [...this.columns];
+        const columns = [...this.state.columns];
         const draggedIdx = columns.findIndex(c => c.name === draggedName);
         const targetIdx = columns.findIndex(c => c.name === targetName);
         
@@ -160,9 +160,8 @@ patch(ListRenderer.prototype, {
             const columnNames = columns.map(c => c.name);
             this._smSaveColumnOrder(columnNames);
             
-            // Update columns and re-render
-            this.columns = columns;
-            this.render();
+            // Update columns via state (auto re-renders in Odoo 17)
+            this.state.columns = columns;
         }
     },
 
