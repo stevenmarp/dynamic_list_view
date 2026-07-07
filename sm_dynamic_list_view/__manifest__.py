@@ -6,18 +6,15 @@
         Allows users to drag and drop columns in list views to reorder them.
         Column order is saved per model in browser localStorage.
     """,
-    "version": "18.0.1.0.0",
+    "version": "14.0.1.0.0",
     "author": "Steven Marp",
     "website": "https://apps.odoo.com/apps/browse?repo_maintainer_id=512936",
     "category": "Tools",
     "license": "OPL-1",
     "depends": ["web"],
-    "assets": {
-        "web.assets_backend": [
-            "sm_dynamic_list_view/static/src/js/list_renderer.js",
-            "sm_dynamic_list_view/static/src/scss/style.scss",
-        ],
-    },
+    "data": [
+        "views/assets.xml",
+    ],
     "images": ["static/description/banner.gif"],
     "installable": True,
     "application": False,
