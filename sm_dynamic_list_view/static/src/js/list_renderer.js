@@ -2,20 +2,14 @@
 
 import { patch } from "@web/core/utils/patch";
 import { ListRenderer } from "@web/views/list/list_renderer";
-import { onMounted, onPatched, onWillRender } from "@odoo/owl";
+import { onMounted, onPatched } from "@odoo/owl";
 import { browser } from "@web/core/browser/browser";
-
-/**
- * SM Dynamic List View
- * Allows dragging columns to reorder them in list views
- * Order is persisted in localStorage per model
- */
 
 const STORAGE_KEY_PREFIX = "sm_list_column_order_";
 
-patch(ListRenderer.prototype, {
+patch(ListRenderer.prototype, "sm_dynamic_list_view.ListRenderer", {
     setup() {
-        super.setup(...arguments);
+        this._super(...arguments);
         
         onMounted(() => {
             this._smSetupDraggableColumns();
@@ -88,7 +82,7 @@ patch(ListRenderer.prototype, {
      * Override getActiveColumns to apply saved order
      */
     getActiveColumns(list) {
-        let columns = super.getActiveColumns(list);
+        const columns = this._super(...arguments);
         
         const savedOrder = this._smLoadColumnOrder();
         if (!savedOrder || savedOrder.length === 0) {
@@ -148,7 +142,7 @@ patch(ListRenderer.prototype, {
         if (draggedName === targetName) return;
         
         // Reorder columns
-        const columns = [...this.columns];
+        const columns = [...this.state.columns];
         const draggedIdx = columns.findIndex(c => c.name === draggedName);
         const targetIdx = columns.findIndex(c => c.name === targetName);
         
@@ -161,16 +155,18 @@ patch(ListRenderer.prototype, {
             this._smSaveColumnOrder(columnNames);
             
             // Update columns and re-render
-            this.columns = columns;
-            this.render();
+            this.state.columns = columns;
         }
     },
 
     _smOnDragEnd(e, th) {
         th.classList.remove("sm-dragging");
-        document.querySelectorAll(".sm-drag-over").forEach(el => {
-            el.classList.remove("sm-drag-over");
-        });
+        const tableEl = this.tableRef?.el;
+        if (tableEl) {
+            tableEl.querySelectorAll(".sm-drag-over").forEach(el => {
+                el.classList.remove("sm-drag-over");
+            });
+        }
         this._smDraggedColumn = null;
     },
 });

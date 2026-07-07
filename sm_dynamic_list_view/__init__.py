@@ -1,1 +1,1 @@
-# SM Dynamic List View
+# -*- coding: utf-8 -*-
