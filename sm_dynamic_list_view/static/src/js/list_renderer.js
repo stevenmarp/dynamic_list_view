@@ -1,45 +1,24 @@
 /** @odoo-module **/
 
-import { patch } from "@web/core/utils/patch";
-import { ListRenderer } from "@web/views/list/list_renderer";
-import { onMounted, onPatched, onWillRender } from "@odoo/owl";
-import { browser } from "@web/core/browser/browser";
-
-/**
- * SM Dynamic List View
- * Allows dragging columns to reorder them in list views
- * Order is persisted in localStorage per model
- */
+import ListRenderer from 'web.ListRenderer';
 
 const STORAGE_KEY_PREFIX = "sm_list_column_order_";
 
-patch(ListRenderer.prototype, {
-    setup() {
-        super.setup(...arguments);
-        
-        onMounted(() => {
-            this._smSetupDraggableColumns();
-        });
-        
-        onPatched(() => {
-            this._smSetupDraggableColumns();
-        });
-    },
-
+ListRenderer.include({
     /**
      * Get storage key for current model
      */
-    _smGetStorageKey() {
-        const resModel = this.props.list?.resModel || "unknown";
+    _smGetStorageKey: function () {
+        const resModel = (this.state && this.state.model) || (this.state && this.state.modelName) || "unknown";
         return STORAGE_KEY_PREFIX + resModel;
     },
 
     /**
      * Load saved column order from localStorage
      */
-    _smLoadColumnOrder() {
+    _smLoadColumnOrder: function () {
         try {
-            const saved = browser.localStorage.getItem(this._smGetStorageKey());
+            const saved = localStorage.getItem(this._smGetStorageKey());
             return saved ? JSON.parse(saved) : null;
         } catch (e) {
             console.warn("[SM] Error loading column order:", e);
@@ -50,127 +29,124 @@ patch(ListRenderer.prototype, {
     /**
      * Save column order to localStorage
      */
-    _smSaveColumnOrder(columnNames) {
+    _smSaveColumnOrder: function (columnNames) {
         try {
-            browser.localStorage.setItem(this._smGetStorageKey(), JSON.stringify(columnNames));
+            localStorage.setItem(this._smGetStorageKey(), JSON.stringify(columnNames));
         } catch (e) {
             console.warn("[SM] Error saving column order:", e);
         }
     },
 
     /**
-     * Setup draggable columns
+     * Override _processColumns to apply saved order
      */
-    _smSetupDraggableColumns() {
-        const tableEl = this.tableRef?.el;
-        if (!tableEl) return;
+    _processColumns: function () {
+        this._super.apply(this, arguments);
         
-        const headerRow = tableEl.querySelector("thead tr");
-        if (!headerRow) return;
-        
-        // Get all column headers (th elements with data-name)
-        const headers = headerRow.querySelectorAll("th[data-name]:not(.sm-drag-setup)");
-        
-        headers.forEach((th) => {
-            th.classList.add("sm-drag-setup", "sm-draggable-column");
-            th.setAttribute("draggable", "true");
+        const savedOrder = this._smLoadColumnOrder();
+        if (savedOrder && savedOrder.length > 0) {
+            const columnMap = new Map(this.columns.map(col => [col.attrs.name, col]));
+            const reordered = [];
             
-            th.addEventListener("dragstart", (e) => this._smOnDragStart(e, th));
-            th.addEventListener("dragover", (e) => this._smOnDragOver(e, th));
-            th.addEventListener("dragenter", (e) => this._smOnDragEnter(e, th));
-            th.addEventListener("dragleave", (e) => this._smOnDragLeave(e, th));
-            th.addEventListener("drop", (e) => this._smOnDrop(e, th));
-            th.addEventListener("dragend", (e) => this._smOnDragEnd(e, th));
+            for (const name of savedOrder) {
+                if (columnMap.has(name)) {
+                    reordered.push(columnMap.get(name));
+                    columnMap.delete(name);
+                }
+            }
+            
+            for (const col of columnMap.values()) {
+                reordered.push(col);
+            }
+            
+            if (reordered.length > 0) {
+                this.columns = reordered;
+            }
+        }
+    },
+
+    /**
+     * Override _renderView to attach drag/drop listeners
+     */
+    _renderView: function () {
+        return this._super.apply(this, arguments).then(() => {
+            this._smSetupDraggableColumns();
         });
     },
 
     /**
-     * Override getActiveColumns to apply saved order
+     * Setup draggable columns on header cells
      */
-    getActiveColumns(list) {
-        let columns = super.getActiveColumns(list);
+    _smSetupDraggableColumns: function () {
+        const self = this;
+        const $headers = this.$('thead th[data-name]:not(.sm-drag-setup)');
         
-        const savedOrder = this._smLoadColumnOrder();
-        if (!savedOrder || savedOrder.length === 0) {
-            return columns;
-        }
-        
-        // Reorder columns based on saved order
-        const columnMap = new Map(columns.map(col => [col.name, col]));
-        const reordered = [];
-        
-        // First add columns in saved order
-        for (const name of savedOrder) {
-            if (columnMap.has(name)) {
-                reordered.push(columnMap.get(name));
-                columnMap.delete(name);
-            }
-        }
-        
-        // Then add any remaining columns
-        for (const col of columnMap.values()) {
-            reordered.push(col);
-        }
-        
-        return reordered.length > 0 ? reordered : columns;
+        $headers.each(function () {
+            const $th = $(this);
+            $th.addClass('sm-drag-setup sm-draggable-column');
+            $th.attr('draggable', 'true');
+            
+            this.addEventListener('dragstart', (e) => self._smOnDragStart(e, $th));
+            this.addEventListener('dragover', (e) => self._smOnDragOver(e, $th));
+            this.addEventListener('dragenter', (e) => self._smOnDragEnter(e, $th));
+            this.addEventListener('dragleave', (e) => self._smOnDragLeave(e, $th));
+            this.addEventListener('drop', (e) => self._smOnDrop(e, $th));
+            this.addEventListener('dragend', (e) => self._smOnDragEnd(e, $th));
+        });
     },
 
-    _smOnDragStart(e, th) {
+    _smOnDragStart: function (e, $th) {
         e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("text/plain", th.dataset.name);
-        th.classList.add("sm-dragging");
-        this._smDraggedColumn = th.dataset.name;
+        e.dataTransfer.setData("text/plain", $th.data('name'));
+        $th.addClass("sm-dragging");
+        this._smDraggedColumn = $th.data('name');
     },
 
-    _smOnDragOver(e, th) {
+    _smOnDragOver: function (e, $th) {
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
     },
 
-    _smOnDragEnter(e, th) {
+    _smOnDragEnter: function (e, $th) {
         e.preventDefault();
-        if (th.dataset.name !== this._smDraggedColumn) {
-            th.classList.add("sm-drag-over");
+        if ($th.data('name') !== this._smDraggedColumn) {
+            $th.addClass("sm-drag-over");
         }
     },
 
-    _smOnDragLeave(e, th) {
-        th.classList.remove("sm-drag-over");
+    _smOnDragLeave: function (e, $th) {
+        $th.removeClass("sm-drag-over");
     },
 
-    _smOnDrop(e, th) {
+    _smOnDrop: function (e, $th) {
         e.preventDefault();
-        th.classList.remove("sm-drag-over");
+        $th.removeClass("sm-drag-over");
         
         const draggedName = e.dataTransfer.getData("text/plain");
-        const targetName = th.dataset.name;
+        const targetName = $th.data('name');
         
         if (draggedName === targetName) return;
         
-        // Reorder columns
         const columns = [...this.columns];
-        const draggedIdx = columns.findIndex(c => c.name === draggedName);
-        const targetIdx = columns.findIndex(c => c.name === targetName);
+        const draggedIdx = columns.findIndex(c => c.attrs.name === draggedName);
+        const targetIdx = columns.findIndex(c => c.attrs.name === targetName);
         
         if (draggedIdx !== -1 && targetIdx !== -1) {
             const [dragged] = columns.splice(draggedIdx, 1);
             columns.splice(targetIdx, 0, dragged);
             
-            // Save order and trigger re-render
-            const columnNames = columns.map(c => c.name);
+            const columnNames = columns.map(c => c.attrs.name);
             this._smSaveColumnOrder(columnNames);
             
-            // Update columns and re-render
-            this.columns = columns;
-            this.render();
+            // Re-process columns and re-render the view
+            this._processColumns(this.columnInvisibleFields);
+            this._render();
         }
     },
 
-    _smOnDragEnd(e, th) {
-        th.classList.remove("sm-dragging");
-        document.querySelectorAll(".sm-drag-over").forEach(el => {
-            el.classList.remove("sm-drag-over");
-        });
+    _smOnDragEnd: function (e, $th) {
+        $th.removeClass("sm-dragging");
+        this.$('.sm-drag-over').removeClass('sm-drag-over');
         this._smDraggedColumn = null;
     },
 });
